@@ -35,6 +35,7 @@ function LSM303DLHC(i2c,drdy,mode) {
   this.ngain=this.gain;
   this.i2c.writeTo(this.a,[2,this.mode]);
   this.scale=new Float32Array([0.73,0.92,1.22,1.52,2.27,2.56,3.03,4.35]);
+  this.writeAccReg(0x20, 0x27);
 }
 
 
@@ -101,5 +102,5 @@ LSM303DLHC.prototype.readAcc = function(reg,count) {
   if (a[0]>=32767) a[0]-=65536;
   if (a[1]>=32767) a[1]-=65536;
   if (a[2]>=32767) a[2]-=65536;
-  return a;
+  return {x: a[0], y: a[1], z:a[2]};
 }
