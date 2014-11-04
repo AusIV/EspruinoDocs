@@ -1,6 +1,6 @@
   /* Copyright (C) 2014 Austin Roberts. See the file LICENSE for copying permission. */
   /*
-This module interfaces with an LSM303DLHC Compass/Magnetometer, a cheap I2C magnetometer.
+This module interfaces with an LSM303DLHC, a cheap I2C magnetometer / accelerometer.
 
 Usage:
 Setup I2C, then call:
@@ -13,8 +13,12 @@ read in single measurement mode:
 compass.reads(function(a){print(a);});
 
 read in continuous measurement mode:
-compass.setmode(0);
+compass.setMode(0);
 console.log(compass.readc());
+
+You can also get acceleration:
+
+compass.readAcc()
 
 */
 

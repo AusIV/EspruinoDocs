@@ -1,58 +1,127 @@
-<!--- Copyright (c) 2013 Gordon Williams, Pur3 Ltd. See the file LICENSE for copying permission. -->
-LSM303DLHC Accelerometer
-======================================
+<!--- Copyright (c) 2014 Austin Roberts. See the file LICENSE for copying permission. -->
+LSM303DLHC Magnetometer / Accelerometer
+=====================
 
-* KEYWORDS: STM32F3DISCOVERY,Accelerometer,LSM303DLHC,I2C,Sensor
+* KEYWORDS: Module,LSM303DLHC,Compass,Magnetometer,Accelerometer
 
-[Datasheet](/datasheets/LSM303DLHCL.pdf)
+This module interfaces with an LSM303DLHC, an I2C magnetometer/accelerometer. The chip, and thus the module, is very similar to the one for the HMC5883, but switches the Y and Z axes of the magnetometer, and also includes an accelerometer.
 
-This is the accelerometer that is on the STM32F3DISCOVERY board.
+If you have previously used the HMC5883, you should be able to replace `require("HMC5883")` with `require("LSM303DLHC")` to read from the LSM303DLHC chip instead, and will also have access to accelerometer data.
 
-Here is some simple code for the accelerometer in the LSM303DLHC chip on the STM32F3DISCOVERY board :
+The chip also includes two interrupt pins, which are currently unused by this module.
 
- 
+Wiring
+----------------
+
+| Device Pin | Espruino |
+| ---------- | -------- |
+| Vcc        | 3.3      |
+| Gnd        | GND      |
+| SCL        | I2C SCL  |
+| SDA        | I2C SDA  |
+| DRDY       | Any GPIO |
+
+
+Setup
+---------------
+
+Setup the I2C that will be used, and then connect to the LSM303DLHC:
+
 ```JavaScript
-I2C.prototype.writeAccReg = function(reg,val) {
-  this.writeTo(0x32>>1, [reg,val]);
-}
-
-I2C.prototype.readAccReg = function(reg,count) {
-  // ORing 0x80 auto-increments the register for each read  
-  this.writeTo(0x32>>1, reg | 0x80);
-  return this.readFrom(0x32>>1, count);
-}
-I2C.prototype.readAcc = function(reg,count) {
-  var d = this.readAccReg(0x28, 6);
-  // reconstruct 16 bit data
-  var a = [d[0] | (d[1]<<8), d[2] | (d[3]<<8), d[4] | (d[5]<<8)];
-  // deal with sign bit
-  if (a[0]>=32767) a[0]-=65536; 
-  if (a[1]>=32767) a[1]-=65536;
-  if (a[2]>=32767) a[2]-=65536;
-  return a;
-}
-``` 
-
-Note:
-----
-
-There is also a Magnetometer in the same package which can be accessed with I2C
-I2C has 7 bit addresses (and Espruino right-aligns these). Some datasheets and devices choose to left-align the address - hence the use of '0x32>>1' rather than just '0x32'
-On the LSM303DLHC accelerometer, ORing 0x80 with the register number (setting the top bit) will ensure that subsequent reads to the same address increment the register pointer.
-You can then use the accelerometer just by typing:
-
- 
-```JavaScript
-I2C1.setup({scl:B6, sda:B7}); // Setup I2C
-I2C1.writeAccReg(0x20, 0x27); // turn Accelerometer on
-I2C1.readAcc() // Return acceleration data
-``` 
-
-The final command will print something like:
-
- 
-```JavaScript
-=[896,2816,16512]
+var compass=require("LSM303DLHC").connect(i2c,drdy,mode)
 ```
- 
-Which is the acceleration in G * 16384 in each of the X, Y and Z axes.
+
+* i2c is the i2c bus being used
+* drdy is the pin connected to the drdy pin of the LSM303DLHC.
+* mode is optional - specify 0 to enter continuous measurement mode immediately.
+
+
+```JavaScript
+compass.setMode(mode)
+```
+
+This sets the current measurement mode.
+
+| Mode | Meaning            |
+|------|--------------------|
+| 1*   | Single measurement |
+| 0    | Continuous measure |
+| 2    | Idle               |
+
+
+
+```JavaScript
+compass.setGain(gain)
+```
+
+Set the gain. Due to limitations of the chip, the new gain is not applied to the next measurement taken, but rather the one after that. This module handles this. In single measurement mode, a dummy measurement is taken so that the next measurement requested will have the new scale. The chip starts up in gain=1.
+
+
+| Gain | Rec. range  | resolution |
+|------|-------------|------------|
+| 0    | +/- 0.88 Ga | 0.73 mGa   |
+| 1*   | +/- 1.3 Ga  | 0.92 mGa   |
+| 2    | +/- 1.9 Ga  | 1.22 mGa   |
+| 3    | +/- 2.5 Ga  | 1.52 mGa   |
+| 4    | +/- 4.0 Ga  | 2.27 mGa   |
+| 5    | +/- 4.7 Ga  | 2.56 mGa   |
+| 6    | +/- 5.6 Ga  | 3.03 mGa   |
+| 7    | +/- 8.1 Ga  | 4.35 mGa   |
+
+
+```JavaScript
+compass.setup(sample,dout,ms)
+```
+
+Set other options
+
+* sample sets the number of samples averaged for each measurement:
+
+| sample | Samples |
+|--------|---------|
+| 0*     | 1       |
+| 1      | 2       |
+| 2      | 4       |
+| 3      | 8       |
+
+* dout sets the frequency with which measurements are taken when in continuous measurement mode
+
+| dout | Output Rate |
+|------|-------------|
+| 0    | 0.75 hz     |
+| 1    | 1.5 hz      |
+| 2    | 3 hz        |
+| 3    | 7.5 hz      |
+| 4*   | 15 hz       |
+| 5    | 30 hz       |
+| 6    | 70 hz       |
+  
+* ms is optional, and defaults to 0. It can be set to 1 or 2 enable positive or negative bias selftest for calibration. Refer to the datasheet for more information.
+
+
+Reading
+----------------
+
+In single measurement mode (the default), read it with reads():
+
+```JavaScript
+compass.reads(function(a) {console.log(a);})
+```
+
+The function is a callback called when the measurement is complete.
+
+In continuous measure mode, use readc():
+
+```JavaScript
+compass.readc()
+```
+
+The measurement is returned as an object with properties overflow, x, y, and z. If overflow is true, at least one of the axes overflowed. The gain should be adjusted and measurement repeated. x, y, and z are the measured field strength in milligauss. Experimentation has found that when exposed to excessively strong magnetic fields at gain=7, the sensor may return 0 or -1 (which will be multiplied by the gain factor by this module), instead of an overflow result.
+
+You can also get the current acceleration:
+
+```JavaScript
+compass.readAcc()
+```
+
+The measurement is returned as an object with properties x, y, and z. These properties represent the acceleration in G * 16384 in each of the X, Y and Z axes..
